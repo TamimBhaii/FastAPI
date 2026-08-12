@@ -7,10 +7,9 @@ from typing import Annotated
 from database import engine, SessionLocal
 from fastapi.responses import JSONResponse
 from typing import Optional
-
+from router import auth
 
 app = FastAPI()
-
 
 class Todo(BaseModel):
     id : int
@@ -20,13 +19,13 @@ class Todo(BaseModel):
     completed : bool
 
 class TodoUpdate(BaseModel):
-    title: Optional[str] = None
-    description: Optional[str] = Field(default=None, max_length=100)
-    priority: Optional[int] = Field(default=None, gt=0, lt=6)
-    completed: Optional[bool] = None
-
+    title : Optional[str] = Field(default=None)
+    description : Optional[str] = Field(default=None, max_length=100)
+    priority : Optional[int] = Field(default=None, gt=0, lt=6)
+    completed : Optional[bool]= Field(default=None)
 
 models.Base.metadata.create_all(bind=engine)
+app.include_router(auth.router)
 
 def get_db():
     db = SessionLocal()
@@ -59,18 +58,29 @@ def create_todos(db : db_dependency, new_todo : Todo):
 
 
 @app.put('/edit/{todo_id}')
-def update_todo(db: db_dependency, todo_id: int, updated_todo: TodoUpdate):
+def update_todos(db : db_dependency, todo_id : int, update_todo : TodoUpdate):
 
     todo = db.query(Todos).filter(Todos.id == todo_id).first()
-
-    if todo is None:
+    if todo is  None:
         raise HTTPException(status_code=404, detail='To do not found')
+    
+    update_data = update_todo.model_dump(exclude_unset=True)
 
-    update_data = updated_todo.model_dump(exclude_unset=True)
-
-    for key, value in update_data.items():
-        setattr(todo, key, value) 
-
+    for key,value in update_data.items():
+        setattr(todo,key,value)
+    
     db.commit()
+    return JSONResponse(status_code=200, content={'message' : 'To do updated successfully'})
 
-    return JSONResponse(status_code=200, content={'message': 'To do updated successfully'})
+
+@app.delete('/delete/{todo_id}')
+def update_todos(db : db_dependency, todo_id : int):
+
+    todo = db.query(Todos).filter(Todos.id == todo_id).first()
+    if todo is  None:
+        raise HTTPException(status_code=404, detail='To do not found')
+    
+    db.query(Todos).filter(Todos.id == todo_id).delete()
+    
+    db.commit()
+    return JSONResponse(status_code=200, content={'message' : 'To do deleted successfully'})
