@@ -2,10 +2,9 @@ from fastapi import FastAPI, APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from datetime import timedelta, datetime, timezone
-from typing import Annotated
+from typing import Annotated, Optional
 from database import SessionLocal
 from models import Users
-from typing import Optional
 from fastapi.responses import JSONResponse
 from passlib.context import CryptContext
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
@@ -16,7 +15,7 @@ router = APIRouter()
 bcrypt_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
 OAuth2_bearer = OAuth2PasswordBearer(tokenUrl='login')
 
-SECRET_KEY ='be11ab898a879f7d459811303f8334e85d3341bd4fb6aa026cb98ce79f67de62'
+SECRET_KEY ='86746eeb8285ca279c6251e0bd83cdd50c88027b934a93f19d8b9af782139516'
 ALGORITHM = 'HS256' 
 
 class CreateUsers(BaseModel):
@@ -26,20 +25,17 @@ class CreateUsers(BaseModel):
     lastname : str
     password : str
     role : str
-    phone_number : str
-
 
 class UpdateUser(BaseModel):
     email : Optional[str] = Field(default=None)
-    username : Optional[str]= Field(default=None)
+    username : Optional[str] = Field(default=None)
     firstname : Optional[str] = Field(default=None)
-    lastname : Optional[str] = Field(default=None)
-    phone_number : Optional[str]= Field(default=None)
-
+    lastname : Optional[str]= Field(default=None)
 
 class UpdatePassword(BaseModel):
     current_password : str
-    new_password : str
+    new_password: str
+
 
 def authenticate_user(username, password, db):
     user = db.query(Users).filter(Users.username == username).first()
@@ -62,7 +58,6 @@ def get_current_user(token: Annotated[str, Depends(OAuth2_bearer)]):
         username: str = payload.get('sub')
         user_id: int = payload.get('id')
         role: str = payload.get('role')
-
         if username is None or user_id is None:
             raise HTTPException(status_code=404, detail='User not found')
         return {'username': username, 'id': user_id, 'role': role}
@@ -90,7 +85,6 @@ def create_users(db : db_dependency, new_user : CreateUsers):
         hash_password = bcrypt_context.hash(new_user.password),
         is_active = True,
         role = new_user.role,
-        phone_number = new_user.phone_number
     )
 
     db.add(user_model)
@@ -107,19 +101,18 @@ def login_user(db : db_dependency, form_data: Annotated[OAuth2PasswordRequestFor
         raise HTTPException(status_code=401, detail='Failed Authentication')
     
     token = create_access_token(user.username, user.id, user.role, timedelta(minutes=30))
-    return {'access_token': token, 'token_type': 'bearer'}
-
+    return {'access_token': token, 'tokey_type': 'bearer'}
 
 
 @router.put('/edituser')
-def update_user(user: user_dependency, db : db_dependency,  update_todo : UpdateUser):
-    if user is None :
+def update_user(user: user_dependency, db : db_dependency, update_user : UpdateUser):
+
+    if user is None: 
         raise HTTPException(status_code=401, detail='Failed Authentication')
-
-    user = db.query(Users).filter(Users.id == user.get('id')).first()
-
     
-    update_data = update_todo.model_dump(exclude_unset=True)
+    user = db.query(Users).filter(Users.id == user.get('id')).first()
+    
+    update_data = update_user.model_dump(exclude_unset=True)
 
     for key,value in update_data.items():
         setattr(user,key,value)
@@ -128,15 +121,14 @@ def update_user(user: user_dependency, db : db_dependency,  update_todo : Update
     return JSONResponse(status_code=200, content={'message' : 'User updated successfully'})
 
 
+@router.put('/passwordchange')
+def update_password(user: user_dependency, db : db_dependency, update_password : UpdatePassword):
 
-
-@router.put('/passworchange')
-def update_password(user: user_dependency, db : db_dependency,  update_pasword : UpdatePassword):
-    if user is None :
+    if user is None: 
         raise HTTPException(status_code=401, detail='Failed Authentication')
-
+    
     user = db.query(Users).filter(Users.id == user.get('id')).first()
-
+    
     if not bcrypt_context.verify(update_password.current_password, user.hash_password):
         raise HTTPException(status_code=401, detail='Wrong Password')
 
